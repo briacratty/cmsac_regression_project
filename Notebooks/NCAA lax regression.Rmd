@@ -1,0 +1,121 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+Load packages
+```{r}
+library(tidyverse)
+library(patchwork)
+library(gt)
+library(ggfortify)
+
+```
+
+Read in data for project
+```{r}
+ncaa_lax_data <- read_csv("http://www.stat.cmu.edu/cmsac/sure/materials/data/regression_projects/womens_ncaa_lacrosse.csv")
+str(ncaa_lax_data)
+```
+Filter out NA values for win pct
+```{r}
+filtered_lax_data <- ncaa_lax_data %>%
+  filter(!is.na(win_pct))
+```
+
+
+EDA looking at possible response variables
+```{r}
+filtered_lax_data %>%
+  ggplot(aes(x = win_pct)) +
+  geom_histogram()
+
+ncaa_lax_data %>%
+  ggplot(aes(x = fouls_per_game)) +
+  geom_histogram()
+
+ncaa_lax_data %>%
+  ggplot(aes(x = caused_turnover_gp)) +
+  geom_histogram()
+
+ncaa_lax_data %>%
+  ggplot(aes(x = turnovers_gp)) +
+  geom_histogram()
+
+ncaa_lax_data %>%
+  ggplot(aes(x = ground_balls_gp)) +
+  geom_histogram()
+```
+
+```{r}
+filtered_lax_data %>%
+  ggplot(aes(x = assists_gp, y= win_pct)) +
+  geom_point() +
+  theme_bw()
+
+filtered_lax_data %>%
+  ggplot(aes(x = caused_turnover_gp, y= win_pct)) +
+  geom_point() +
+  theme_bw()
+
+filtered_lax_data %>%
+  ggplot(aes(x = draw_controls_gp, y= win_pct)) +
+  geom_point() +
+  theme_bw()
+
+filtered_lax_data %>%
+  ggplot(aes(x = fouls_per_game, y= win_pct)) +
+  geom_point() +
+  theme_bw()
+
+filtered_lax_data %>%
+  ggplot(aes(x = clr_pct, y= win_pct)) +
+  geom_point() +
+  theme_bw()
+
+filtered_lax_data %>%
+  ggplot(aes(x = freepos_goals, y= win_pct)) +
+  geom_point() +
+  theme_bw()
+
+filtered_lax_data %>%
+  ggplot(aes(x = ground_balls_gp, y= win_pct)) +
+  geom_point() +
+  theme_bw()
+
+filtered_lax_data %>%
+  ggplot(aes(x = turnovers_gp, y= win_pct)) +
+  geom_point() +
+  theme_bw()
+
+filtered_lax_data %>%
+  ggplot(aes(x = sog_gp, y= win_pct)) +
+  geom_point() +
+  theme_bw()
+
+filtered_lax_data %>%
+  ggplot(aes(x = ga_gp, y= win_pct)) +
+  geom_point() +
+  theme_bw()
+
+filtered_lax_data %>%
+  ggplot(aes(x = gf_gp, y= win_pct)) +
+  geom_point() +
+  theme_bw()
+
+filtered_lax_data %>%
+  ggplot(aes(x = yellow_cards, y= win_pct)) +
+  geom_point() +
+  theme_bw()
+
+```
+```{r}
+init_lm <- 
+  lm(win_pct ~ gf_gp, data = filtered_lax_data)
+summary(init_lm)
+init_lm$fitted.values
+
+autoplot(init_lm) +
+  theme_bw()
+```
+
+
