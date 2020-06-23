@@ -1,29 +1,37 @@
 ---
 title: "R Notebook"
-output: html_notebook
+output:
+  html_document:
+    df_print: paged
 ---
-Load packages
+```{r}
+# install.packages("ggcorrplot")
+# install.packages("ggdendro")
+```
+
 ```{r}
 library(tidyverse)
 library(patchwork)
 library(gt)
 library(ggfortify)
-
+library(ggcorrplot)
+library(ggdendro)
 ```
+Load relevant packages
 
-Read in data for project
 ```{r}
 ncaa_lax_data <- read_csv("http://www.stat.cmu.edu/cmsac/sure/materials/data/regression_projects/womens_ncaa_lacrosse.csv")
 str(ncaa_lax_data)
 ```
-Filter out NA values for win pct
+Read in data for project
+
 ```{r}
 filtered_lax_data <- ncaa_lax_data %>%
   filter(!is.na(win_pct))
 ```
+Filter out NA values for win pct 
 
 
-EDA looking at possible response variables
 ```{r}
 filtered_lax_data %>%
   ggplot(aes(x = win_pct)) +
@@ -44,7 +52,12 @@ ncaa_lax_data %>%
 ncaa_lax_data %>%
   ggplot(aes(x = ground_balls_gp)) +
   geom_histogram()
+
+ncaa_lax_data %>%
+  ggplot(aes(x = margin)) +
+  geom_histogram()
 ```
+EDA looking at possible response variables. Win percent looks fairly normal but worried about getting predicted values out of the possible 0-1 range. Also interested in using margin but seems to possibly be bimodal, needs looked into further.
 
 ```{r}
 filtered_lax_data %>%
@@ -108,6 +121,8 @@ filtered_lax_data %>%
   theme_bw()
 
 ```
+Looked into per game variables to examine correlation between them and win percentage as the response variable. Goals for and against most strongly correlated which seems to be an obvious inference. Correlation also seen with assists_gp, draw_controls_gp, and turnovers_gp.
+
 ```{r}
 init_lm <- 
   lm(win_pct ~ gf_gp, data = filtered_lax_data)
@@ -117,5 +132,46 @@ init_lm$fitted.values
 autoplot(init_lm) +
   theme_bw()
 ```
+Initial regression using win percent as the response variable. Data points 116 and 223 seem to hold a higher leverage and should be looked into to. The residual-fitted and scale location plots looks close to horizontal. The qqplot follows nicely along the 45 degree line. Does nott seem to be a problem with normality.
+
+```{r}
+filtered_lax_margin <- ncaa_lax_data %>%
+  filter(!is.na(margin))
+```
+Filter out NA values for Margin
+
+```{r}
+init_lm_margin <- lm(margin ~ ground_balls_gp, data = filtered_lax_margin)
+summary(init_lm_margin)
+
+autoplot(init_lm_margin) +
+  theme_bw()
+```
+Initial linear regression test for margin as a response variable. Wanted to look into plots because of the possible bimodal nature of the histogram in the initial exploration. Plots for residual vs fitted and scale-location look to have a bit of a pattern to them. QQplot deviates from the 45 degree line a bit for lower values but follows nicely otherwise. Points 112, 230, and 116 have higher leverage and should be looked into further.
+
+```{r}
+ncaa_model_data <- filtered_lax_data %>%
+  select(win_pct, assists_gp, draw_controls_gp, 
+        sv_pct, gf_gp, ga_gp, turnovers_gp, caused_turnover_gp)
+
+ncaa_cor_matrix <- cor(ncaa_model_data)
+ggcorrplot(ncaa_cor_matrix)
+
+round_cor_matrix <- round(cor(ncaa_model_data), 2)
+ggcorrplot(round_cor_matrix, 
+           hc.order = TRUE,
+           type = "lower",
+           lab = TRUE)
+```
+
+Correlation matrix for possible predictor variables. GF and GA are strongly 
+correlated with win percentage which is not a big surprise. Assists, draw 
+controls, turnovers, and save percent also correlated
+
+
+
+
+
+
 
 
