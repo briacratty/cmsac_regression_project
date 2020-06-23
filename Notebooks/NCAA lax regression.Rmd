@@ -7,8 +7,10 @@ output:
 ```{r}
 # install.packages("ggcorrplot")
 # install.packages("ggdendro")
+
 # install.packages("GGally")
 # install.packages("glmnet")
+
 ```
 
 ```{r}
@@ -155,8 +157,13 @@ Initial linear regression test for margin as a response variable. Wanted to look
 
 ```{r}
 ncaa_model_data <- filtered_lax_data %>%
+
   select(win_pct, assists_gp, caused_turnover_gp, draw_controls_gp, fouls_per_game, free_position_pct, ground_balls_gp, sv_pct, 
         sog_gp, turnovers_gp)
+
+  select(win_pct, assists_gp, draw_controls_gp, 
+        sv_pct, gf_gp, ga_gp, turnovers_gp, caused_turnover_gp)
+
 
 ncaa_cor_matrix <- cor(ncaa_model_data)
 ggcorrplot(ncaa_cor_matrix)
@@ -171,6 +178,7 @@ ggcorrplot(round_cor_matrix,
 Correlation matrix for possible predictor variables. GF and GA are strongly 
 correlated with win percentage which is not a big surprise. Assists, draw 
 controls, turnovers, and save percent also correlated
+
 
 
 After performing initial EDA we have decided to use win percentage as our response
@@ -250,6 +258,7 @@ data_2020_szn <- ncaa_lax_data %>%
 #  "lambda.min")) can't get this to work
 ```
 Wanted to make prediction using the cv_elastic_10 model but were unable to gett hte predcit function to work using a cv.glmnet object.
+
 
 
 
