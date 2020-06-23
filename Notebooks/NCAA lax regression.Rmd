@@ -1,29 +1,41 @@
 ---
 title: "R Notebook"
-output: html_notebook
+output:
+  html_document:
+    df_print: paged
 ---
-Load packages
+```{r}
+# install.packages("ggcorrplot")
+# install.packages("ggdendro")
+# install.packages("GGally")
+# install.packages("glmnet")
+```
+
 ```{r}
 library(tidyverse)
 library(patchwork)
 library(gt)
 library(ggfortify)
-
+library(ggcorrplot)
+library(ggdendro)
+library(GGally)
+library(glmnet)
 ```
+Load relevant packages
 
-Read in data for project
 ```{r}
 ncaa_lax_data <- read_csv("http://www.stat.cmu.edu/cmsac/sure/materials/data/regression_projects/womens_ncaa_lacrosse.csv")
 str(ncaa_lax_data)
 ```
-Filter out NA values for win pct
+Read in data for project
+
 ```{r}
 filtered_lax_data <- ncaa_lax_data %>%
   filter(!is.na(win_pct))
 ```
+Filter out NA values for win pct 
 
 
-EDA looking at possible response variables
 ```{r}
 filtered_lax_data %>%
   ggplot(aes(x = win_pct)) +
@@ -44,7 +56,12 @@ ncaa_lax_data %>%
 ncaa_lax_data %>%
   ggplot(aes(x = ground_balls_gp)) +
   geom_histogram()
+
+ncaa_lax_data %>%
+  ggplot(aes(x = margin)) +
+  geom_histogram()
 ```
+EDA looking at possible response variables. Win percent looks fairly normal but worried about getting predicted values out of the possible 0-1 range. Also interested in using margin but seems to possibly be bimodal, needs looked into further.
 
 ```{r}
 filtered_lax_data %>%
@@ -108,6 +125,8 @@ filtered_lax_data %>%
   theme_bw()
 
 ```
+Looked into per game variables to examine correlation between them and win percentage as the response variable. Goals for and against most strongly correlated which seems to be an obvious inference. Correlation also seen with assists_gp, draw_controls_gp, and turnovers_gp.
+
 ```{r}
 init_lm <- 
   lm(win_pct ~ gf_gp, data = filtered_lax_data)
@@ -117,5 +136,120 @@ init_lm$fitted.values
 autoplot(init_lm) +
   theme_bw()
 ```
+Initial regression using win percent as the response variable. Data points 116 and 223 seem to hold a higher leverage and should be looked into to. The residual-fitted and scale location plots looks close to horizontal. The qqplot follows nicely along the 45 degree line. Does nott seem to be a problem with normality.
+
+```{r}
+filtered_lax_margin <- ncaa_lax_data %>%
+  filter(!is.na(margin))
+```
+Filter out NA values for Margin
+
+```{r}
+init_lm_margin <- lm(margin ~ ground_balls_gp, data = filtered_lax_margin)
+summary(init_lm_margin)
+
+autoplot(init_lm_margin) +
+  theme_bw()
+```
+Initial linear regression test for margin as a response variable. Wanted to look into plots because of the possible bimodal nature of the histogram in the initial exploration. Plots for residual vs fitted and scale-location look to have a bit of a pattern to them. QQplot deviates from the 45 degree line a bit for lower values but follows nicely otherwise. Points 112, 230, and 116 have higher leverage and should be looked into further.
+
+```{r}
+ncaa_model_data <- filtered_lax_data %>%
+  select(win_pct, assists_gp, caused_turnover_gp, draw_controls_gp, fouls_per_game, free_position_pct, ground_balls_gp, sv_pct, 
+        sog_gp, turnovers_gp)
+
+ncaa_cor_matrix <- cor(ncaa_model_data)
+ggcorrplot(ncaa_cor_matrix)
+
+round_cor_matrix <- round(cor(ncaa_model_data), 2)
+ggcorrplot(round_cor_matrix, 
+           hc.order = TRUE,
+           type = "lower",
+           lab = TRUE)
+```
+
+Correlation matrix for possible predictor variables. GF and GA are strongly 
+correlated with win percentage which is not a big surprise. Assists, draw 
+controls, turnovers, and save percent also correlated
+
+
+After performing initial EDA we have decided to use win percentage as our response
+variable. We will hold out 2020 data when training the model because a limited
+number of games were played due to the COVID-19 pandemic, 
+skewing win percentages for that season. 
+
+```{r}
+model_lax_data <- ncaa_lax_data %>%
+  filter((season == 2018 | season ==  2019), !is.na(win_pct)) %>%
+  select(win_pct, assists_gp, caused_turnover_gp, draw_controls_gp, fouls_per_game, free_position_pct, ground_balls_gp, sv_pct, 
+        sog_gp, turnovers_gp)
+
+```
+Data filtered to be only 2018 and 2019 data, removed null values for win 
+percentage. Selected all percent / per game variables as opposed to raw values. 
+
+```{r}
+ncaa_explanatory_variables <- select(model_lax_data, -win_pct)
+explanatory_cor_matrix <- cor(ncaa_explanatory_variables)
+distance_matrix_cor <- 1 - abs(explanatory_cor_matrix)
+distance_matrix_cor <- as.dist(distance_matrix_cor)
+
+ncaa_hclust <- hclust(distance_matrix_cor, "complete")
+ggdendrogram(ncaa_hclust, rotate = TRUE)
+```
+Most closely correlated is sog_gp and draw_controls_gp but these seem fundamnetally different enough that it wouldn't be wise to get rid of one at this time.
+
+
+```{r}
+ggpairs(model_lax_data,
+        columns =
+          c("win_pct", "assists_gp", "caused_turnover_gp", "draw_controls_gp", "fouls_per_game"))
+
+ ggpairs(model_lax_data,
+        columns =
+          c("win_pct", "free_position_pct", "ground_balls_gp", "sv_pct", 
+        "sog_gp", "turnovers_gp"))
+```
+Draw Controls, Assists, SOG, Save Percent and Turnovers per game seem to have the strongest correlation with win percentage
+
+
+```{r}
+model_x <- model.matrix(win_pct ~ ., model_lax_data)[, -1]
+model_y <- model_lax_data$win_pct
+init_reg_fit <- lm(win_pct ~ ., model_lax_data)
+coef(init_reg_fit)
+
+set.seed(2020)
+fold_id <- sample(rep(1:10, length.out = nrow(model_x)))
+cv_elastic_10 <- cv.glmnet(model_x, model_y, foldid = fold_id, alpha = .1)
+cv_elastic_20 <- cv.glmnet(model_x, model_y, foldid = fold_id, alpha = .2)
+cv_elastic_30 <- cv.glmnet(model_x, model_y, foldid = fold_id, alpha = .3)
+cv_elastic_40 <- cv.glmnet(model_x, model_y, foldid = fold_id, alpha = .4)
+cv_elastic_50 <- cv.glmnet(model_x, model_y, foldid = fold_id, alpha = .5)
+cv_elastic_60 <- cv.glmnet(model_x, model_y, foldid = fold_id, alpha = .6)
+cv_elastic_70 <- cv.glmnet(model_x, model_y, foldid = fold_id, alpha = .7)
+cv_elastic_80 <- cv.glmnet(model_x, model_y, foldid = fold_id, alpha = .8)
+cv_elastic_90 <- cv.glmnet(model_x, model_y, foldid = fold_id, alpha = .9)
+cv_ridge <- cv.glmnet(model_x, model_y, foldid = fold_id, alpha = 0)
+cv_lasso <- cv.glmnet(model_x, model_y, foldid = fold_id, alpha = 1)
+
+which.min(c(min(cv_elastic_10$cvm), min(cv_elastic_20$cvm), min(cv_elastic_30$cvm), min(cv_elastic_40$cvm), min(cv_elastic_50$cvm), min(cv_elastic_60$cvm), min(cv_elastic_70$cvm), min(cv_elastic_80$cvm), min(cv_elastic_90$cvm), min(cv_ridge$cvm), min(cv_lasso$cvm)))
+
+min(cv_elastic_10$cvm)
+min(cv_ridge$cvm)
+min(cv_lasso$cvm)
+```
+Created 9 possible elastic net models, ridge and lasso. Elastic net with alpha of 0.10 seem to have the lowest MSE. 
+
+```{r}
+coef(cv_elastic_10)
+plot(cv_elastic_10)
+data_2020_szn <- ncaa_lax_data %>%
+  filter(season == 2020)
+# predict(cv_elastic_10, data_2020_szn, s = c("lambda.1se",
+#  "lambda.min")) can't get this to work
+```
+Wanted to make prediction using the cv_elastic_10 model but were unable to gett hte predcit function to work using a cv.glmnet object.
+
 
 
